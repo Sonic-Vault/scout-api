@@ -1,0 +1,42 @@
+[
+    {
+        "name": "SailFish",
+        "description": "SailFish is the first DEX on Opencampus EDUCHAIN. Built to be fast and efficient, SailFish is a veDEX that distributes 100% of protocol fees to users.",
+        "website": "https://sailfish.finance/",
+        "logo_uri": "https://ik.imagekit.io/dvihd4xty/sailfish/logo.svg",
+        "symbol": "",
+        "decimals": 18,
+        "address" : "",
+        "category": "dex"
+    },
+    {
+        "name": "ThrustPad",
+        "description": "ThrustPad is an innovative Initial Liquidity Offering (ILO) platform seamlessly built on the Educhain blockchain. Designed to empower projects and investors alike with comprehensive suite of tools and services on their fundraising journey.",
+        "website": "https://thrustpad.finance/",
+        "logo_uri": "https://app.sailfish.finance/_next/image?url=https%3A%2F%2Fik.imagekit.io%2Fdvihd4xty%2FThrustPad_logo_CI8jARgs7&w=1920&q=75",
+        "symbol": "",
+        "decimals": 18,
+        "address" : "",
+        "category": "launchpad"
+    },
+    {
+        "name": "TinyTap",
+        "description": "TinyTap is a library of educational games for kids handmade by teachers, therapists, and education experts from all over the world. TinyTap is designed to help you turn playtime into a learning opportunity!",
+        "website": "https://campus.tinytap.com/",
+        "logo_uri": "https://ik.imagekit.io/dvihd4xty/sailfish/tinytap.svg",
+        "symbol": "",
+        "decimals": 18,
+        "address" : "",
+        "category": "education"
+    },
+    {
+        "name": "Daily Wiser",
+        "description": "Daily Wiser is an innovative mobile-first learning platform that transforms personal growth into an engaging daily habit.",
+        "website": "https://www.dailywiser.xyz/",
+        "logo_uri": "https://app.sailfish.finance/_next/image?url=https%3A%2F%2Fik.imagekit.io%2Fdvihd4xty%2FAI_Tutor_logo__59whKrOC&w=1920&q=75",
+        "symbol": "WISER",
+        "decimals": 18,
+        "address" : "0xF9E03759752BE9fAA70a5556f103dbD385a2471C",
+        "category": "education"
+    }
+]

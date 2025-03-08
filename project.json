@@ -1,0 +1,16 @@
+{
+    "name": "SailFish",
+    "tvl": 60000000000,
+    "sentiment": "positive",
+    "whitepaper_summary": "SailFish is the first DEX on Opencampus EDUCHAIN. Built to be fast and efficient, SailFish is a veDEX that distributes 100% of protocol fees to users.",
+    "github_activity": {
+      "commits_last_30_days": 1200,
+      "contributors": 250,
+      "repo_url": "https://github.com/sailfish"
+    },
+    "address": {
+      "mainnet": "0x00000000219ab540356cBB839Cbe05303d7705Fa",
+      "testnet": "0x0000000000000000000000000000000000000000"
+    }
+}
+  
