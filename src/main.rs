@@ -48,7 +48,7 @@ async fn main() {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = "0.0.0.0:7000".parse().unwrap();
+    let addr = env::var("SERVER_HOST").unwrap().parse().unwrap();
     println!("Server running on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
