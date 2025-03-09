@@ -1,30 +1,35 @@
 mod auth;
 mod constants;
+mod defi;
 mod models;
 mod profiles;
+mod swap;
 mod wallets;
 
 use auth::{callback, login};
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use dotenvy::dotenv;
-use models::{BalanceResponse, Project, ProjectSummary, TransactionResponse, TransferForm};
+use models::{
+    AppState, BalanceResponse, Project, ProjectSummary, TransactionResponse, TransferForm,
+};
 use profiles::{Profile, ProfileDatabase};
-use std::fs;
 use std::sync::Arc;
+use std::{env, fs};
 use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
-    let app_state = auth::AppState {
-        oauth_state: Arc::new(tokio::sync::Mutex::new(None)),
+    let state = AppState {
+        oauth: Arc::new(tokio::sync::Mutex::new(None)),
+        magpie: defi::magpiefi::MagpieClient::new(&env::var("MAGPIEFI_API_URL").unwrap()),
     };
 
     let app = Router::new()
@@ -34,9 +39,14 @@ async fn main() {
         .route("/projects", get(get_projects))
         .route("/projects/:chain/:pid", get(get_project))
         .route("/balance/:id", get(get_balance))
-        .route("/transfer", post(do_transfer))
+        .route("/transfer", post(execute_transfer))
+        .route("/swap/quote", post(swap::get_quote))
+        .route("/swap/execute", post(swap::execute_swap))
+        .route("/swap/status", get(swap::get_swap_status))
+        .route("/swap/details", get(swap::get_swap_details))
+        .route("/swap/distributions", get(swap::get_distributions))
         .layer(CorsLayer::permissive())
-        .with_state(app_state);
+        .with_state(state);
 
     let addr = "0.0.0.0:7000".parse().unwrap();
     println!("Server running on {}", addr);
@@ -58,10 +68,7 @@ async fn get_project() -> Json<ProjectSummary> {
     Json(summ)
 }
 
-async fn get_profile(
-    State(_state): State<auth::AppState>,
-    Path(user_id): Path<String>,
-) -> Json<Profile> {
+async fn get_profile(Path(user_id): Path<String>) -> Json<Profile> {
     let db = ProfileDatabase::new().unwrap();
     let profile = db.get(&user_id).unwrap();
     if let Some(p) = profile {
@@ -71,10 +78,7 @@ async fn get_profile(
     Json(Profile::default())
 }
 
-async fn get_balance(
-    State(_state): State<auth::AppState>,
-    Path(user_id): Path<String>,
-) -> impl IntoResponse {
+async fn get_balance(Path(user_id): Path<String>) -> impl IntoResponse {
     let balance = wallets::get_balance(&user_id).await;
     let my_balance = BalanceResponse {
         balance: balance.unwrap(),
@@ -83,10 +87,7 @@ async fn get_balance(
     (StatusCode::OK, Json(my_balance)).into_response()
 }
 
-async fn do_transfer(
-    State(_state): State<auth::AppState>,
-    Json(payload): Json<TransferForm>,
-) -> impl IntoResponse {
+async fn execute_transfer(Json(payload): Json<TransferForm>) -> impl IntoResponse {
     let trx = wallets::transfer(&payload.user_id, &payload.recipient, &payload.amount).await;
     let my_transaction = TransactionResponse { trx: trx.unwrap() };
 

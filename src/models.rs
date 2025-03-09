@@ -1,6 +1,12 @@
 #![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub oauth: Arc<tokio::sync::Mutex<Option<crate::auth::OAuthState>>>,
+    pub magpie: crate::defi::magpiefi::MagpieClient,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Project {

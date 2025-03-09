@@ -1,4 +1,5 @@
 use crate::constants::{TWITTER_OAUTH_AUTHORIZE_URL, TWITTER_OAUTH_TOKEN_URL};
+use crate::models::AppState;
 use crate::profiles::{Profile, ProfileDatabase};
 use crate::wallets::{Wallet, WalletDatabase};
 use axum::{
@@ -17,7 +18,6 @@ use rand::thread_rng;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct OAuthState {
@@ -42,11 +42,6 @@ pub struct TwitterUser {
 pub struct CallbackQuery {
     pub code: String,
     pub state: String,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub oauth_state: Arc<tokio::sync::Mutex<Option<OAuthState>>>,
 }
 
 pub fn create_twitter_oauth_client() -> Result<BasicClient, Box<dyn std::error::Error>> {
@@ -100,7 +95,7 @@ pub async fn login(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    let mut oauth_state = state.oauth_state.lock().await;
+    let mut oauth_state = state.oauth.lock().await;
     *oauth_state = Some(OAuthState {
         client,
         csrf_token: csrf_token.clone(),
@@ -114,7 +109,7 @@ pub async fn callback(
     State(state): State<AppState>,
     Query(params): Query<CallbackQuery>,
 ) -> impl IntoResponse {
-    let mut oauth_state_guard = state.oauth_state.lock().await;
+    let mut oauth_state_guard = state.oauth.lock().await;
 
     let oauth_state = match oauth_state_guard.take() {
         Some(state) => state,
