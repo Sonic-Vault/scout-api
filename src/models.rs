@@ -1,11 +1,15 @@
 #![allow(dead_code)]
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![allow(clippy::redundant_field_names)]
+
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use crate::defi::spl_swap_client::SplSwapClient; // Fixed import path
 
 #[derive(Clone)]
 pub struct AppState {
     pub oauth: Arc<tokio::sync::Mutex<Option<crate::auth::OAuthState>>>,
-    pub magpie: crate::defi::magpiefi::MagpieClient,
+    pub magpie: SplSwapClient, // Use the directly imported type
 }
 
 #[derive(Debug, Serialize, Deserialize)]

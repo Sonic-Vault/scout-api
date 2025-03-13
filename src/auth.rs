@@ -7,16 +7,13 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse},
 };
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::prelude::*;
-use hex;
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
     PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
-use rand::thread_rng;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
+use solana_sdk::signature::{Keypair, Signer};
 use std::env;
 
 #[derive(Clone)]
@@ -149,20 +146,16 @@ pub async fn callback(
                     match profile_db.get(&params.state).unwrap() {
                         Some(_profile) => {}
                         None => {
-                            let mut rng = thread_rng();
-                            let signing_key = SigningKey::random(&mut rng);
-                            let private_key_bytes = signing_key.to_bytes();
-                            let private_key_hex = hex::encode(private_key_bytes);
-                            let wallet = LocalWallet::from_bytes(&private_key_bytes)
-                                .expect("Invalid private key");
-                            let address = wallet.address();
+                            let keypair = Keypair::new();
+                            let public_key = keypair.pubkey();
+                            let address = public_key.to_string();
 
                             let wallet_db = WalletDatabase::new().unwrap();
 
                             let wallet = Wallet {
                                 id: None,
-                                address: format!("{:#x}", address),
-                                private: private_key_hex,
+                                address: address.clone(),
+                                private: keypair.to_base58_string(),
                             };
 
                             let _ = wallet_db.create(&wallet).unwrap();
@@ -172,7 +165,7 @@ pub async fn callback(
                                 user_id: params.state,
                                 username: user.data.username.to_string(),
                                 name: user.data.name.to_string(),
-                                wallet: format!("{:#x}", address),
+                                wallet: address,
                             };
 
                             let _ = profile_db.upsert(&profile).unwrap();

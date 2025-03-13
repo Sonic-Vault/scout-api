@@ -3,7 +3,7 @@ mod constants;
 mod defi;
 mod models;
 mod profiles;
-mod swap;
+mod swap; // Uncommented swap module
 mod wallets;
 
 use auth::{callback, login};
@@ -27,9 +27,10 @@ use tower_http::cors::CorsLayer;
 async fn main() {
     dotenv().ok();
 
+    // Initialize our SplSwapClient instance
     let state = AppState {
         oauth: Arc::new(tokio::sync::Mutex::new(None)),
-        magpie: defi::magpiefi::MagpieClient::new(&env::var("MAGPIEFI_API_URL").unwrap()),
+        magpie: defi::MagpieClient::new(), // The alias is defined in defi/mod.rs
     };
 
     let app = Router::new()
@@ -40,11 +41,12 @@ async fn main() {
         .route("/projects/:chain/:pid", get(get_project))
         .route("/balance/:id", get(get_balance))
         .route("/transfer", post(execute_transfer))
-        .route("/swap/quote", post(swap::get_quote))
-        .route("/swap/execute", post(swap::execute_swap))
-        .route("/swap/status", get(swap::get_swap_status))
-        .route("/swap/details", get(swap::get_swap_details))
-        .route("/swap/distributions", get(swap::get_distributions))
+        // Uncommented and slightly renamed routes for Solana swaps
+        .route("/swap/solana/quote", post(swap::get_quote))
+        .route("/swap/solana/execute/:id", post(swap::execute_swap))
+        .route("/swap/solana/status", get(swap::get_swap_status))
+        .route("/swap/solana/details", get(swap::get_swap_details))
+        .route("/swap/solana/distributions", get(swap::get_distributions))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

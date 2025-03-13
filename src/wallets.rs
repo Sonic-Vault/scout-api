@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![allow(clippy::redundant_field_names)]
 
 use crate::constants::DB_PATH;
 use crate::profiles::ProfileDatabase;
@@ -6,19 +8,24 @@ use rusqlite::OptionalExtension;
 use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 
-use ethers::{
-    prelude::*,
-    providers::{Http, Provider},
-    types::Address,
-    utils::format_units,
+use bs58;
+use solana_client::rpc_client::RpcClient;
+use solana_sdk::{
+    commitment_config::CommitmentConfig,
+    message::Message,
+    pubkey::Pubkey,
+    signature::Keypair, // Removed unused Signature import
+    signer::Signer,
+    system_instruction,
+    transaction::Transaction,
 };
-use std::{convert::TryFrom, env, str::FromStr, sync::Arc};
+use std::{env, str::FromStr};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Wallet {
     pub id: Option<i64>,
     pub address: String,
-    pub private: String,
+    pub private: String, // Base58 encoded private key
 }
 
 pub struct WalletDatabase {
@@ -76,21 +83,39 @@ impl WalletDatabase {
     }
 }
 
+// Change from `fn decode_keypair` to `pub fn decode_keypair` to make it accessible
+pub fn decode_keypair(private_key: &str) -> Result<Keypair> {
+    let bytes = bs58::decode(private_key)
+        .into_vec()
+        .map_err(|_| rusqlite::Error::InvalidQuery)?;
+    
+    let keypair = Keypair::from_bytes(&bytes)
+        .map_err(|_| rusqlite::Error::InvalidQuery)?;
+    
+    Ok(keypair)
+}
+
 pub async fn get_balance(user_id: &str) -> Result<String> {
     let db = ProfileDatabase::new().unwrap();
     let profile = db.get(&user_id).unwrap();
 
     if let Some(p) = profile {
-        let provider = Provider::<Http>::try_from(env::var("RPC_URL").unwrap()).unwrap();
-
-        let provider = Arc::new(provider);
-        let address = Address::from_str(&p.wallet).unwrap();
-        let balance = provider.get_balance(address, None).await.unwrap();
-        let formatted = format_units(balance, 18).unwrap();
-        return Ok(formatted.to_string());
+        let rpc_client = RpcClient::new(env::var("RPC_URL").unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()));
+        
+        let pubkey = Pubkey::from_str(&p.wallet)
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        
+        match rpc_client.get_balance(&pubkey) {
+            Ok(balance) => {
+                // Convert lamports to SOL (1 SOL = 10^9 lamports)
+                let sol_balance = balance as f64 / 1_000_000_000.0;
+                return Ok(sol_balance.to_string());
+            },
+            Err(_) => return Ok("0".to_string()),
+        }
     }
 
-    return Ok("0".to_string());
+    Ok("0".to_string())
 }
 
 pub async fn transfer(user_id: &str, recipient: &str, amount: &str) -> Result<String> {
@@ -100,53 +125,62 @@ pub async fn transfer(user_id: &str, recipient: &str, amount: &str) -> Result<St
     if let Some(p) = profile {
         let db = WalletDatabase::new().unwrap();
         let wallet = db.get(&p.wallet).unwrap();
+        
         if let Some(w) = wallet {
-            let provider = Provider::<Http>::try_from(env::var("RPC_URL").unwrap()).unwrap();
-            let provider = Arc::new(provider);
-            let chain_id = env::var("CHAIN_ID")
-                .unwrap()
-                .parse::<u64>()
-                .expect("Invalid chain ID");
-
-            let wallet = w
-                .private
-                .parse::<LocalWallet>()
-                .unwrap()
-                .with_chain_id(chain_id);
-            println!("addr {}", wallet.address());
-            let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
-
-            let to_address = recipient.parse::<Address>().unwrap();
-            let value = ethers::utils::parse_ether(amount).unwrap();
-
-            let tx = TransactionRequest::new()
-                .from(wallet.address())
-                .to(to_address)
-                .value(value)
-                .gas_price(provider.get_gas_price().await.unwrap())
-                .gas(21000); // Standard gas limit for ETH transfers
-
-            match client.send_transaction(tx, None).await {
-                Ok(pending_tx) => {
-                    let tx_hash = pending_tx.tx_hash();
-                    println!("Transaction sent! Tx Hash: {:?}", tx_hash);
-
-                    let receipt = pending_tx.await.unwrap();
-                    println!(
-                        "Transaction confirmed in block: {:?}",
-                        receipt.unwrap().block_number
-                    );
-
-                    return Ok(format!(
-                        "{}/tx/{:?}",
-                        env::var("CHAIN_EXPLORER_URL").unwrap(),
-                        tx_hash
-                    ));
-                }
-                Err(_) => {}
-            };
+            // Parse amount in SOL to lamports
+            let amount = amount.parse::<f64>()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let lamports = (amount * 1_000_000_000.0) as u64;
+            
+            // Create a Solana client
+            let rpc_client = RpcClient::new_with_commitment(
+                env::var("RPC_URL").unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string()),
+                CommitmentConfig::confirmed(),
+            );
+            
+            // Decode the keypair from the stored private key
+            let keypair = decode_keypair(&w.private)?;
+            
+            // Parse recipient address
+            let recipient = Pubkey::from_str(recipient)
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+            
+            // Create the transfer instruction
+            let instruction = system_instruction::transfer(
+                &keypair.pubkey(),
+                &recipient,
+                lamports,
+            );
+            
+            // Get recent blockhash
+            let recent_blockhash = rpc_client
+                .get_latest_blockhash()
+                .map_err(|_| rusqlite::Error::InvalidQuery)?;
+            
+            // Create a transaction
+            let message = Message::new_with_blockhash(
+                &[instruction],
+                Some(&keypair.pubkey()),
+                &recent_blockhash,
+            );
+            
+            let transaction = Transaction::new(
+                &[&keypair],
+                message,
+                recent_blockhash,
+            );
+            
+            // Send the transaction
+            match rpc_client.send_and_confirm_transaction(&transaction) {
+                Ok(signature) => {
+                    let explorer_url = env::var("CHAIN_EXPLORER_URL")
+                        .unwrap_or_else(|_| "https://explorer.solana.com".to_string());
+                    return Ok(format!("{}/tx/{}", explorer_url, signature));
+                },
+                Err(_) => return Ok("Transaction failed".to_string()),
+            }
         }
     }
 
-    return Ok("0x".to_string());
+    Ok("0x".to_string())
 }
